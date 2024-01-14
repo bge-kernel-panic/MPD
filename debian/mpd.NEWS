@@ -1,0 +1,6 @@
+mpd (0.23.14-1) unstable; urgency=medium
+
+    MPD no longer starts the system service by default. On most systems, the
+    user service should be preferred.
+
+ -- Florian Schlichting <fsfs@debian.org>  Mon, 09 Oct 2023 21:44:02 +0200

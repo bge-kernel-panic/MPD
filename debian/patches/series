@@ -1,0 +1,4 @@
+# Debian-specific
+fixed-ffmpeg-ftbs.patch
+systemd_honor_MPDCONF.patch
+mpd.service.documentation.user.patch

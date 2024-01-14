@@ -1,0 +1,20 @@
+Description: Fixed FTBS with ffmpeg 6.1 (#1057578)
+Author: skidoo23 <skidoo@web.de>
+Origin: https://github.com/MusicPlayerDaemon/MPD/commit/50c1e3738a672f933560247b5527d365d17b1c02
+Bug: https://github.com/MusicPlayerDaemon/MPD/issues/1898
+Applied-Upstream: 0.23.15
+Last-Update: 2023-12-16
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/src/decoder/plugins/FfmpegIo.cxx
++++ b/src/decoder/plugins/FfmpegIo.cxx
+@@ -26,6 +26,9 @@
+ 
+ extern "C" {
+ #include <libavutil/mem.h>
++#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(58, 29, 100)
++#include <libavutil/error.h>
++#endif
+ }
+ 
+ AvioStream::~AvioStream()
