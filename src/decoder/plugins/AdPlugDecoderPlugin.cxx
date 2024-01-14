@@ -24,6 +24,7 @@
 #include "fs/Path.hxx"
 #include "util/Domain.hxx"
 #include "util/StringView.hxx"
+#include "util/ScopeExit.hxx"
 #include "Log.hxx"
 
 #include <adplug/adplug.h>
@@ -60,8 +61,7 @@ adplug_file_decode(DecoderClient &client, Path path_fs)
 	CPlayer *player = CAdPlug::factory(path_fs.c_str(), &opl);
 	if (player == nullptr)
 		return;
-	AtScopeExit(player) { delete player; }
-	
+	AtScopeExit(player) { delete player; };
 
 	const AudioFormat audio_format(sample_rate, SampleFormat::S16, CHANNELS);
 	assert(audio_format.IsValid());
@@ -73,22 +73,18 @@ adplug_file_decode(DecoderClient &client, Path path_fs)
 
 	unsigned long write = 0UL;
 	int16_t buffer[SNDBUFSIZE * CHANNELS];
-	while (cmd != DecoderCommand::STOP && player->update())
-	{
-		for (int towrite = sample_rate / player->getrefresh(); towrite; towrite -= write)
-		{
+	while (cmd != DecoderCommand::STOP && player->update()) {
+		for (int towrite = sample_rate / player->getrefresh(); towrite; towrite -= write) {
 			write = (towrite > SNDBUFSIZE ? SNDBUFSIZE : towrite);
 			opl.update(buffer, write);
 			cmd = client.SubmitData(nullptr,
 						buffer, sizeof(buffer),
 						write);
-			if (cmd == DecoderCommand::SEEK)
-			{
+			if (cmd == DecoderCommand::SEEK) {
 				break;
 			}
 		}
-		if (cmd == DecoderCommand::SEEK)
-		{
+		if (cmd == DecoderCommand::SEEK) {
 			write = 0;
 			player->seek(client.GetSeekTime().ToMS());
 			client.CommandFinished();
@@ -115,7 +111,7 @@ adplug_scan_file(Path path_fs, TagHandler &handler) noexcept
 	CPlayer *player = CAdPlug::factory(path_fs.c_str(), &opl);
 	if (player == nullptr)
 		return false;
-	AtScopeExit(player) { delete player; }
+	AtScopeExit(player) { delete player; };
 	
 	handler.OnDuration(SongTime::FromMS(player->songlength()));
 
@@ -128,7 +124,6 @@ adplug_scan_file(Path path_fs, TagHandler &handler) noexcept
 				handler);
 	}
 
-	delete player;
 	return true;
 }
 
