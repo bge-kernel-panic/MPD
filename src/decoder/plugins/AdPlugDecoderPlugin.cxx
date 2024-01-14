@@ -47,37 +47,54 @@ adplug_init(const ConfigBlock &block)
 	return true;
 }
 
+const int SNDBUFSIZE = 512;
+const int CHANNELS = 2;
+
 static void
 adplug_file_decode(DecoderClient &client, Path path_fs)
 {
-	CEmuopl opl(sample_rate, true, true);
+	CEmuopl opl(sample_rate, true, CHANNELS > 1);
 	opl.init();
+	opl.settype(Copl::TYPE_OPL2);
 
 	CPlayer *player = CAdPlug::factory(path_fs.c_str(), &opl);
 	if (player == nullptr)
 		return;
+	AtScopeExit(player) { delete player; }
+	
 
-	const AudioFormat audio_format(sample_rate, SampleFormat::S16, 2);
+	const AudioFormat audio_format(sample_rate, SampleFormat::S16, CHANNELS);
 	assert(audio_format.IsValid());
 
-	client.Ready(audio_format, false,
+	client.Ready(audio_format, true,
 		     SongTime::FromMS(player->songlength()));
 
-	DecoderCommand cmd;
+	DecoderCommand cmd = DecoderCommand::NONE;
 
-	do {
-		if (!player->update())
-			break;
-
-		int16_t buffer[2048];
-		constexpr unsigned frames_per_buffer = std::size(buffer) / 2;
-		opl.update(buffer, frames_per_buffer);
-		cmd = client.SubmitData(nullptr,
-					buffer, sizeof(buffer),
-					0);
-	} while (cmd == DecoderCommand::NONE);
-
-	delete player;
+	unsigned long write = 0UL;
+	int16_t buffer[SNDBUFSIZE * CHANNELS];
+	while (cmd != DecoderCommand::STOP && player->update())
+	{
+		for (int towrite = sample_rate / player->getrefresh(); towrite; towrite -= write)
+		{
+			write = (towrite > SNDBUFSIZE ? SNDBUFSIZE : towrite);
+			opl.update(buffer, write);
+			cmd = client.SubmitData(nullptr,
+						buffer, sizeof(buffer),
+						write);
+			if (cmd == DecoderCommand::SEEK)
+			{
+				break;
+			}
+		}
+		if (cmd == DecoderCommand::SEEK)
+		{
+			write = 0;
+			player->seek(client.GetSeekTime().ToMS());
+			client.CommandFinished();
+			cmd = DecoderCommand::NONE;
+		}
+	}
 }
 
 static void
@@ -91,13 +108,15 @@ adplug_scan_tag(TagType type, const std::string &value,
 static bool
 adplug_scan_file(Path path_fs, TagHandler &handler) noexcept
 {
-	CEmuopl opl(sample_rate, true, true);
+	CEmuopl opl(sample_rate, true, CHANNELS > 1);
 	opl.init();
+	opl.settype(Copl::TYPE_OPL2);
 
 	CPlayer *player = CAdPlug::factory(path_fs.c_str(), &opl);
 	if (player == nullptr)
 		return false;
-
+	AtScopeExit(player) { delete player; }
+	
 	handler.OnDuration(SongTime::FromMS(player->songlength()));
 
 	if (handler.WantTag()) {
@@ -114,14 +133,10 @@ adplug_scan_file(Path path_fs, TagHandler &handler) noexcept
 }
 
 static const char *const adplug_suffixes[] = {
-	"amd",
-	"d00",
-	"hsc",
-	"laa",
-	"rad",
-	"raw",
-	"sa2",
-	nullptr
+  "a2m", "adl", "amd", "bam", "cff", "cmf", "d00", "dfm", "dmo", "dro",
+  "dtm", "hsc", "hsp", "ins", "jbm", "ksm", "laa", "lds", "m", "mad",
+  "mkj", "msc", "rad", "raw", "rix", "rol", "s3m", "sa2", "sat", "sci",
+  "sng", "wlf", "xad", "xsm", nullptr
 };
 
 constexpr DecoderPlugin adplug_decoder_plugin =
